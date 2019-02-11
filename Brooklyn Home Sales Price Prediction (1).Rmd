@@ -1,0 +1,670 @@
+---
+title: "Brooklyn Homes Sale Price"
+author: "Gaurav Burman"
+date: "December 2, 2018"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+---
+```{r}
+path = "C:/Users/gaura/Downloads/TAMU/613/project"
+setwd(path)
+
+install.packages("data.table")
+install.packages("bit64")
+library(data.table)
+library(bit64)
+
+data = fread("brooklyn_sales_map.csv")
+
+dim(data)
+
+
+```
+
+
+
+```{r}
+data = as.data.frame(data)
+
+NAs = numeric()
+percent_NAs = numeric()
+
+for ( i in 1:ncol(data)){
+    NAs[i] =sum(is.na(data[,i]))
+    percent_NAs[i] = (NAs[i]/390883)*100
+}
+
+Missing_values= data.frame(Variable_Name = names(data), Total_Missing_Values = NAs, Percent_Values_missing =percent_NAs)
+
+Missing_values
+
+```
+DATA CLEANING
+
+The data contains a large number of variables which increase the noise and reduce the prediction capability of the model due to increased variance. We need to reduce the number of variables to the maximum before model fitting.
+
+Going through the attribute description(attached as annexure), we can remove many variables on the following grounds.
+1. Duplicacy -Reading from the description we find that many variables have same information but just different names. This is the case as the dataset is a product of concatenation of two different tables.
+
+2. No Description- Many variables have no proper description. This may be the case as many variables are representations of various IDs of PLUTOMAP files which supposedly have no direct impact on the predictions made. 
+
+3. Large percentage of mising data- We have discarded all variables where missinig values are more than 75% of all observations.
+
+```{r}
+data_stage2 = subset(data, select = -c(borough, Borough, V1, UnitsRes, UnitsTotal, LotArea, BldgArea, BldgClass, Easements, easement, OwnerType, building_class_category, ZipCode, YearBuilt, MAPPLUTO_F, PLUTOMapID, SHAPE_Leng, SHAPE_Area, Address, EDesigNum,Version, Sanborn, ZoneMap, ZMCode, HistDist,Landmark, APPDate, FIRM07_FLA, PFIRM15_FL, Ext, AreaSource, sale_date,ZoneDist2, ZoneDist3, ZoneDist4, Overlay1, Overlay2, SPDist1, SPDist2, SPDist3, LtdHeight ))
+
+dim(data_stage2)
+```
+
+We still have 70 attributes left in our data, which are still way too many for proper prediction.
+
+Now, we check for 0s and NAs in our remaining data and impute them with median for numerical and mode for categorical data.
+
+We find that Sale Price is 0 for transfer of property which does helps us in prediction so we can remove such observations
+
+```{r}
+transferred_properties = which(data_stage2$sale_price == 0)
+
+data_stage2 = data_stage2[-(transferred_properties),]
+
+dim(data_stage2)
+```
+```{r}
+data_stage2 = subset(data_stage2, select = -c(OwnerName))
+```
+
+Let's look at the structure of our attributes
+
+```{r}
+str(data_stage2)
+```
+
+Conversting 'character' variables to 'factors'
+```{r}
+
+data_stage2$neighborhood = as.factor(data_stage2$neighborhood)  
+data_stage2$tax_class = as.factor(data_stage2$tax_class)
+data_stage2$building_class = as.factor(data_stage2$building_class)
+data_stage2$address = as.factor(data_stage2$apartment_number)
+data_stage2$building_class_at_sale =  as.factor(data_stage2$building_class_at_sale)
+data_stage2$FireComp = as.factor(data_stage2$FireComp)
+data_stage2$SanitSub = as.factor(data_stage2$SanitSub)
+data_stage2$ZoneDist1 = as.factor(data_stage2$ZoneDist1)
+data_stage2$SplitZone = as.factor(data_stage2$SplitZone)
+data_stage2$IrrLotCode = as.factor(data_stage2$IrrLotCode)
+data_stage2$apartment_number = as.factor(data_stage2$apartment_number)
+
+str(data_stage2)
+```
+
+BBL and APPBBL also appear to be meant for identification purpose only. It is concatenation of the borough code, tax block and tax lot, which are already available to us separately.
+
+```{r}
+data_stage2 = subset(data_stage2, select = -c(BBL, APPBBL))
+```
+
+We can see there are same 4447 levels in 'address' and 'apartment_number'. Checking them more closely
+```{r}
+summary(data_stage2$address)
+summary(data_stage2$apartment_number)
+```
+
+We find that both address and apartment_number entries are exactly the same. There are no entries for 193218 data observations. Moreover, they only represent the apartment_number and do not give any perception of the area or street or block where the property is present. So we can omit these attributes also.
+
+```{r}
+data_stage2 = subset(data_stage2, select = -c(address, apartment_number))
+
+```
+Let's check the number of missing values again for data cleaned uptil now.
+
+```{r}
+data = as.data.frame(data)
+
+NAs_2 = numeric()
+Type = character()
+
+for ( i in 1:ncol(data_stage2)){
+    NAs_2[i] =sum(is.na(data_stage2[,i]))
+    Type[i] = class(data_stage2[,i])
+}
+
+Missing_values= data.frame(Variable_Name = names(data_stage2), Total_Missing_Values = NAs_2, Type= Type)
+
+Missing_values
+
+```
+We keep a copy of data removing all observations with any variable NA.
+```{r}
+no_NA_data = na.omit(data_stage2)
+```
+
+
+We replace missing values in character variables using mode() and in continuos variables using median().
+
+```{r}
+#For integer and numeric values
+data_stage2$CD = ifelse(is.na(data_stage2$CD)== TRUE, median(data_stage2$CD, na.rm = TRUE), data_stage2$CD )
+data_stage2$CT2010 = ifelse(is.na(data_stage2$CT2010)== TRUE, median(data_stage2$CT2010, na.rm = TRUE), data_stage2$CT2010 )
+data_stage2$CB2010 = ifelse(is.na(data_stage2$CB2010)== TRUE, median(data_stage2$CB2010, na.rm = TRUE), data_stage2$CB2010 )
+data_stage2$SchoolDist = ifelse(is.na(data_stage2$SchoolDist)== TRUE, median(data_stage2$SchoolDist, na.rm = TRUE), data_stage2$SchoolDist )
+data_stage2$Council = ifelse(is.na(data_stage2$Council)== TRUE, median(data_stage2$Council, na.rm = TRUE), data_stage2$Council)
+data_stage2$PolicePrct = ifelse(is.na(data_stage2$PolicePrct)== TRUE, median(data_stage2$PolicePrct, na.rm = TRUE), data_stage2$PolicePrct )
+data_stage2$HealthCent = ifelse(is.na(data_stage2$HealthCent)== TRUE, median(data_stage2$HealthCent, na.rm = TRUE), data_stage2$HealthCent )
+data_stage2$HealthArea = ifelse(is.na(data_stage2$HealthArea)== TRUE, median(data_stage2$HealthArea, na.rm = TRUE), data_stage2$HealthArea )
+data_stage2$SanitBoro = ifelse(is.na(data_stage2$SanitBoro)== TRUE, median(data_stage2$SanitBoro, na.rm = TRUE), data_stage2$SanitBoro )
+data_stage2$LandUse = ifelse(is.na(data_stage2$LandUse)== TRUE, median(data_stage2$LandUse, na.rm = TRUE), data_stage2$LandUse)
+data_stage2$ComArea = ifelse(is.na(data_stage2$ComArea)== TRUE, median(data_stage2$ComArea, na.rm = TRUE), data_stage2$ComArea)
+data_stage2$ResArea = ifelse(is.na(data_stage2$ResArea)== TRUE, median(data_stage2$ResArea, na.rm = TRUE), data_stage2$ResArea)
+data_stage2$OfficeArea = ifelse(is.na(data_stage2$OfficeArea)== TRUE, median(data_stage2$OfficeArea, na.rm = TRUE), data_stage2$OfficeArea)
+data_stage2$RetailArea = ifelse(is.na(data_stage2$RetailArea)== TRUE, median(data_stage2$RetailArea, na.rm = TRUE), data_stage2$RetailArea)
+data_stage2$GarageArea = ifelse(is.na(data_stage2$GarageArea)== TRUE, median(data_stage2$GarageArea, na.rm = TRUE), data_stage2$GarageArea )
+data_stage2$StrgeArea = ifelse(is.na(data_stage2$StrgeArea)== TRUE, median(data_stage2$StrgeArea, na.rm = TRUE), data_stage2$StrgeArea )
+data_stage2$FactryArea = ifelse(is.na(data_stage2$FactryArea)== TRUE, median(data_stage2$FactryArea, na.rm = TRUE), data_stage2$FactryArea )
+data_stage2$OtherArea = ifelse(is.na(data_stage2$OtherArea)== TRUE, median(data_stage2$OtherArea, na.rm = TRUE), data_stage2$OtherArea )
+data_stage2$NumBldgs = ifelse(is.na(data_stage2$NumBldgs)== TRUE, median(data_stage2$NumBldgs, na.rm = TRUE), data_stage2$NumBldgs )
+data_stage2$NumFloors = ifelse(is.na(data_stage2$NumFloors)== TRUE, median(data_stage2$NumFloors, na.rm = TRUE), data_stage2$NumFloors )
+data_stage2$LotFront = ifelse(is.na(data_stage2$LotFront)== TRUE, median(data_stage2$LotFront, na.rm = TRUE), data_stage2$LotFront )
+data_stage2$LotDepth = ifelse(is.na(data_stage2$LotDepth)== TRUE, median(data_stage2$LotDepth, na.rm = TRUE), data_stage2$LotDepth )
+data_stage2$BldgFront = ifelse(is.na(data_stage2$BldgFront)== TRUE, median(data_stage2$BldgFront, na.rm = TRUE), data_stage2$BldgFront)
+data_stage2$BldgDepth = ifelse(is.na(data_stage2$BldgDepth)== TRUE, median(data_stage2$BldgDepth, na.rm = TRUE), data_stage2$BldgDepth )
+data_stage2$ProxCode = ifelse(is.na(data_stage2$ProxCode)== TRUE, median(data_stage2$ProxCode, na.rm = TRUE), data_stage2$ProxCode )
+data_stage2$LotType = ifelse(is.na(data_stage2$LotType)== TRUE, median(data_stage2$LotType, na.rm = TRUE), data_stage2$LotType)
+data_stage2$BsmtCode = ifelse(is.na(data_stage2$BsmtCode)== TRUE, median(data_stage2$BsmtCode, na.rm = TRUE), data_stage2$BsmtCode )
+data_stage2$AssessLand = ifelse(is.na(data_stage2$AssessLand)== TRUE, median(data_stage2$AssessLand, na.rm = TRUE), data_stage2$AssessLand )
+data_stage2$AssessTot = ifelse(is.na(data_stage2$AssessTot)== TRUE, median(data_stage2$AssessTot, na.rm = TRUE), data_stage2$AssessTot)
+data_stage2$ExemptLand = ifelse(is.na(data_stage2$ExemptLand)== TRUE, median(data_stage2$ExemptLand, na.rm = TRUE), data_stage2$ExemptLand )
+data_stage2$ExemptTot = ifelse(is.na(data_stage2$ExemptTot)== TRUE, median(data_stage2$ExemptTot, na.rm = TRUE), data_stage2$ExemptTot )
+data_stage2$YearAlter1 = ifelse(is.na(data_stage2$YearAlter1)== TRUE, median(data_stage2$YearAlter1, na.rm = TRUE), data_stage2$YearAlter1 )
+data_stage2$YearAlter2 = ifelse(is.na(data_stage2$YearAlter2)== TRUE, median(data_stage2$YearAlter2, na.rm = TRUE), data_stage2$YearAlter2 )
+data_stage2$BuiltFAR = ifelse(is.na(data_stage2$BuiltFAR)== TRUE, median(data_stage2$BuiltFAR, na.rm = TRUE), data_stage2$BuiltFAR )
+data_stage2$ResidFAR = ifelse(is.na(data_stage2$ResidFAR)== TRUE, median(data_stage2$ResidFAR, na.rm = TRUE), data_stage2$ResidFAR )
+data_stage2$CommFAR = ifelse(is.na(data_stage2$CommFAR)== TRUE, median(data_stage2$CommFAR, na.rm = TRUE), data_stage2$CommFAR )
+data_stage2$FacilFAR = ifelse(is.na(data_stage2$FacilFAR)== TRUE, median(data_stage2$FacilFAR, na.rm = TRUE), data_stage2$FacilFAR )
+data_stage2$BoroCode = ifelse(is.na(data_stage2$BoroCode)== TRUE, median(data_stage2$BoroCode, na.rm = TRUE), data_stage2$BoroCode )
+data_stage2$CondoNo = ifelse(is.na(data_stage2$CondoNo)== TRUE, median(data_stage2$CondoNo, na.rm = TRUE), data_stage2$CondoNo )
+data_stage2$XCoord = ifelse(is.na(data_stage2$XCoord)== TRUE, median(data_stage2$XCoord, na.rm = TRUE), data_stage2$XCoord )
+data_stage2$Tract2010 = ifelse(is.na(data_stage2$Tract2010)== TRUE, median(data_stage2$Tract2010, na.rm = TRUE), data_stage2$Tract2010 )
+data_stage2$YCoord = ifelse(is.na(data_stage2$YCoord)== TRUE, median(data_stage2$YCoord, na.rm = TRUE), data_stage2$YCoord )
+data_stage2$TaxMap = ifelse(is.na(data_stage2$TaxMap)== TRUE, median(data_stage2$TaxMap, na.rm = TRUE), data_stage2$TaxMap )
+
+```
+
+```{r}
+#We define a mode function as R does not has a built-in mode function
+
+getmode = function(x){
+  x[which.max(tabulate(x))]
+}
+
+#imputing missing categorical variables by mode
+data_stage2$FireComp = ifelse(is.na(data_stage2$FireComp)==TRUE, getmode(data_stage2$FireComp), data_stage2$FireComp)
+data_stage2$FireComp = as.factor(data_stage2$FireComp)
+data_stage2$SanitSub = ifelse(is.na(data_stage2$SanitSub)==TRUE, getmode(data_stage2$SanitSub), data_stage2$SanitSub)
+data_stage2$SanitSub = as.factor(data_stage2$SanitSub)
+data_stage2$SplitZone = ifelse(is.na(data_stage2$SplitZone)==TRUE, getmode(data_stage2$SplitZone), data_stage2$SplitZone)
+data_stage2$SplitZone = as.factor(data_stage2$SplitZone)
+data_stage2$ZoneDist1 = ifelse(is.na(data_stage2$ZoneDist1)==TRUE, getmode(data_stage2$ZoneDist1), data_stage2$ZoneDist1)
+data_stage2$ZoneDist1 = as.factor(data_stage2$ZoneDist1)
+data_stage2$IrrLotCode = ifelse(is.na(data_stage2$IrrLotCode)==TRUE, getmode(data_stage2$IrrLotCode), data_stage2$IrrLotCode)
+data_stage2$IrrLotCode = as.factor(data_stage2$IrrLotCode)
+
+
+
+```
+
+-----------------------------------------------------------------------------------------------------------------------------------------------
+
+
+Here onwards, solved using no NA values.
+
+```{r}
+no_NA_data = na.omit(data_stage2)
+```
+
+```{r}
+
+dim(no_NA_data)
+```
+
+```{r}
+dim(no_NA_data)
+```
+
+We want to predict sales price of brooklyn holmes. Let's look at the scatter plot of the response variable.
+
+```{r}
+hist(no_NA_data$sale_price)
+```
+We see some outliers at both the ends.So we take the observations from 10 percentile to 90 percentile of sale price.
+
+```{r}
+quantile(no_NA_data$sale_price,c(0.1,0.9))
+```
+
+
+```{r}
+no_NA_data_trimmed = subset(no_NA_data, sale_price>142524 & sale_price<1250500)
+
+dim(no_NA_data_trimmed)
+
+```
+```{r}
+hist(no_NA_data_trimmed$sale_price)
+```
+and we get a fairly uniform distribution of response variable i.e sale price 
+
+Now 65 attributes are fairly high to make a prediction with good accuracy. So we apply principal component analysis to break the reduce the number of varibles and capture most of the information in vital few variables.
+
+To apply PCA all the variables must be in numeric, so we create a dummy dataframe.
+
+```{r}
+str(no_NA_data_trimmed)
+```
+
+UNIVARIATE ANALYSIS
+
+Neighborhood- 
+Department of Finance assessors determine the neighborhood name in the course of valuing properties. The common name of the neighborhood is generally the same as the name Finance designates. However, there may be slight differences in neighborhood boundary lines and some sub-neighborhoods may not be included.
+
+```{r}
+boxplot(sale_price~ neighborhood, no_NA_data_trimmed, col = "blue")
+```
+
+```{r}
+dt = data.table(no_NA_data_trimmed)
+nb_class =as.data.frame( dt[,list(mean= mean(sale_price)), by = neighborhood])
+nb_class
+nb_class$category = ifelse(nb_class$mean>300000 & nb_class$mean<452407.5, "low price neighborhood",ifelse
+  (nb_class$mean>452407.5 & nb_class$mean<554618.1, "medium price neighborhood",ifelse
+    (nb_class$mean>554618.1 & nb_class$mean<631312.3, "High price neighborhood", "Expensive Neighborhood")))
+
+```
+```{r}
+#creating new categories for neighborhood
+nb_class$category = ifelse(nb_class$mean>300000 & nb_class$mean<452407.5, "low price neighborhood",ifelse
+  (nb_class$mean>452407.5 & nb_class$mean<554618.1, "medium price neighborhood",ifelse
+    (nb_class$mean>554618.1 & nb_class$mean<631312.3, "High price neighborhood", "Expensive Neighborhood")))
+
+```
+
+
+```{r}
+no_NA_data_trimmed = merge(no_NA_data_trimmed, nb_class[,c("neighborhood","category")])
+boxplot(sale_price~category , no_NA_data_trimmed, col= "red")
+```
+Low price neighborhood has some outliers.
+
+TAX_CLASS - 
+Every property in the city is assigned to one of four tax classes (Classes 1, 2, 3, and 4), based on the use of the property.
+. Class 1: Includes most residential property of up to three units (such as one-, two-, and three-family homes and small stores or offices with one or two attached apartments), vacant land that is zoned for residential use, and most condominiums that are not more than three stories.
+. Class 2: Includes all other property that is primarily residential, such as cooperatives and condominiums.
+. Class 3: Includes property with equipment owned by a gas, telephone or electric company.
+. Class 4: Includes all other properties not included in class 1,2, and 3, such as offices, factories, warehouses, garage buildings, etc.
+
+
+```{r}
+boxplot(sale_price~tax_class, no_NA_data_trimmed)
+```
+We see that there are 11 factors in Tax_class where as ideally it should be only 1,2,3 & 4 as per the description. So we merge 1, 1A, 1B, 1C to 1 and 2, 2A, 2B, 2C to 2. 
+
+```{r}
+no_NA_data_trimmed$tax_class = ifelse ( no_NA_data_trimmed$tax_class %in% c("1","1A", "1B","1C"),1, ifelse(no_NA_data_trimmed$tax_class %in% c("2","2A", "2B","2C"),2,
+ifelse(no_NA_data_trimmed$tax_class ==3,3, ifelse(no_NA_data_trimmed$tax_class == 4,4,0)))) 
+```
+```{r}
+boxplot(sale_price~tax_class, no_NA_data_trimmed)
+```
+
+
+We see that tax_class 2 has some outliers and the sale_price is randomly distributed among the tax classes.
+
+Block- 
+A Tax Block is a sub-division of the borough on which real properties are located.
+The Department of Finance uses a Borough-Block-Lot classification to label all real property in the City. "Whereas" addresses describe the street location of a property, the block and lot distinguishes one unit of real property from another, such as the different condominiums in a single building. Also, block and lots are not subject to name changes based on which side of the parcel the building puts its entrance on.
+
+
+```{r}
+plot(no_NA_data_trimmed$block, no_NA_data_trimmed $sale_price)
+```
+No correlation found.
+
+
+Lot - 
+
+Often the Tax Lot number can tell you the type of tax lot. The following table identifies some of these tax lot numbering conventions. Of course there are exceptions to each convention.
+
+TAX LOT NUMBER    TYPE OF LOT
+1-999           Traditional Tax Lots
+1001-6999       Condominium Unit Lots
+7501-7599       Condominium Billing Lots
+8000-8899       Subterranean Tax lots
+8900-8999       DTM Dummy Tax Lots
+9000-9899       Air Rights Tax Lots
+
+```{r}
+plot(no_NA_data_trimmed$lot, no_NA_data_trimmed $sale_price)
+```
+No correlation found. in this raw plot. But we can create categories of TYPE OF PLOT as defind in the description.
+
+```{r}
+no_NA_data_trimmed$type_of_lot = ifelse( no_NA_data_trimmed$lot %in% 1:999, "Traditional Tax Lots", "Condominium Unit Lots")
+```
+Plotting Boxplots of Type of Plots.
+
+```{r}
+boxplot(sale_price~ type_of_lot, no_NA_data_trimmed)
+```
+From the above boxplot we can infer that the median of sale price of Traditional Tax lots is higher than the median sale price of condominium plots.
+
+
+Building Class- 
+This is a field that we are including so that users of the Rolling Sales Files can easily identify similar properties by broad usage (e.g. One Family Homes) without looking up individual Building Classes.
+
+```{r}
+boxplot(sale_price~building_class, no_NA_data_trimmed, col = "blue")
+```
+
+We can see that some building classes do not form any box. For better understanding, we count the number of rows in each column to check the discrepancy.
+
+```{r}
+bc = data.frame(Building_Class = levels(no_NA_data_trimmed$building_class), count = tabulate(no_NA_data_trimmed$building_class)) 
+
+bc[order(bc$count),]
+```
+We find that many factors have been retained even after subsetting or indexing the data frame from the original data. These factors provide no information as they don't contain any data. We decide to drop them. We just need to apply factor again to our subsetted dataset.
+
+```{r}
+no_NA_data_trimmed$building_class = factor(no_NA_data_trimmed$building_class)
+```
+```{r}
+bc = data.frame(building_class = levels(no_NA_data_trimmed$building_class), count = tabulate(no_NA_data_trimmed$building_class)) 
+
+bc[order(bc$count),]
+```
+We further remove building classes that have less than  100 count as they will not give a good estimate of the sale price.
+
+```{r}
+no_NA_data_trimmed =  merge (no_NA_data_trimmed, bc , by = "building_class")
+
+no_NA_data_trimmed = subset(no_NA_data_trimmed, no_NA_data_trimmed$count>100)
+no_NA_data_trimmed$building_class = factor (no_NA_data_trimmed$building_class)
+```
+Again plotting the boxplot
+
+```{r}
+boxplot(sale_price~building_class,no_NA_data_trimmed, col= "gold")
+```
+
+
+Zip Code - 
+
+The property's postal code
+
+```{r}
+plot(no_NA_data_trimmed$zip_code, no_NA_data_trimmed$sale_price )
+```
+WE find that some zipcodes have 0 value. This is inconsistent since zipcodes cannot have zero values. Let's remove the rows having zipcodes 0.
+
+```{r}
+no_NA_data_trimmed =  subset(no_NA_data_trimmed , zip_code != 0)
+no_NA_data_trimmed$building_class = factor(no_NA_data_trimmed$building_class)
+
+plot(no_NA_data_trimmed$zip_code, no_NA_data_trimmed$sale_price )
+```
+We find that there is no discernable co-relation.
+
+Residential Units-
+The number of residential units at the listed property.
+
+```{r}
+plot( no_NA_data_trimmed$residential_units, no_NA_data_trimmed$sale_price)
+```
+No correlation found.
+
+Commercial Units:
+The number of commercial units at the listed property.
+```{r}
+plot( no_NA_data_trimmed$commercial_units, no_NA_data_trimmed$sale_price)
+```
+No correlation found.
+
+Total Units:
+The total number of units at the listed property.
+
+```{r}
+plot(no_NA_data_trimmed$total_units, no_NA_data_trimmed$sale_price)
+```
+No Correlation found.
+
+Land Sqft.
+The land area of the property listed in square feet.
+
+
+```{r}
+plot(no_NA_data_trimmed$land_sqft, no_NA_data_trimmed$sale_price)
+```
+
+```{r}
+attach(no_NA_data_trimmed)
+library(ggplot2)
+ggplot(no_NA_data_trimmed, aes(year_of_sale, mean(sale_price), color = type_of_lot)) + geom_line(aes(group = type_of_lot),col =  "black") + geom_point()
+
+```
+We need to use ggplot after grouping block wise or area wise.
+
+Gross Sqft-
+The total area of all the floors of a building as measured from the exterior surfaces of the outside walls of the building, including the land area and space within any building or structure on the property.
+
+```{r}
+plot(no_NA_data_trimmed$gross_sqft, no_NA_data_trimmed$sale_price)
+```
+The trend is similar to land sqft.
+
+Year Built-
+Year the structure on the property was built.
+
+```{r}
+plot(no_NA_data_trimmed$year_built, no_NA_data_trimmed$sale_price)
+```
+We find that many properties have Year field as 0. This information will be misleading for the model so we delete the observations having year as 0.
+
+```{r}
+no_NA_data_trimmed =  subset(no_NA_data_trimmed, year_built > 1800 )
+
+no_NA_data_trimmed$building_class = factor(no_NA_data_trimmed$building_class)
+
+plot(no_NA_data_trimmed$year_built, no_NA_data_trimmed$sale_price)
+```
+Tax Class at Sale-
+
+
+```{r}
+boxplot(sale_price~ tax_class_at_sale, no_NA_data_trimmed)
+
+```
+This plot is exactly same as Tax Class. So we remove this too.
+
+
+Building_class_at_sale:
+The Building Classification is used to describe a property's constructive use. The first position of the Building Class is a letter that is used to describe a general class of properties (for example "A" signifies one-family homes, "O" signifies office buildings. "R" signifies condominiums). The second position, a number, adds more specific information about the property's use or construction style (using our previous examples "A0" is a Cape Cod style one family home, "O4" is a tower type office building and "R5" is a commercial condominium unit). The term Building Class as used by the Department of Finance is interchangeable with the term Building Code as used by the Department of Buildings.
+
+```{r}
+no_NA_data_trimmed$building_class_at_sale = factor(no_NA_data_trimmed$building_class_at_sale)
+
+boxplot(sale_price~ building_class_at_sale, no_NA_data_trimmed, col = "green")
+```
+This is same as building_class so we can remove this attribute.
+
+```{r}
+pairs(sale_price ~ year_of_sale+CT2010+ CB2010+CD, no_NA_data_trimmed)
+```
+
+```{r}
+names(no_NA_data_trimmed)
+```
+
+```{r}
+final_data = subset ( no_NA_data_trimmed, select = c(sale_price, building_class, category, tax_class, type_of_lot,zip_code, residential_units, gross_sqft,year_built, year_of_sale, CD, Council, LandUse,ResArea, GarageArea, StrgeArea, NumBldgs,NumFloors, BldgFront,BldgDepth,ProxCode, IrrLotCode,  LotType,AssessTot, ExemptTot, YearAlter1,YearAlter2, BuiltFAR,XCoord, YCoord))
+
+```
+
+
+```{r}
+dim(final_data)
+```
+
+#Linear Regression
+
+```{r}
+library(boot)
+set.seed(10)
+glm.fit=glm (sale_price~.-tax_class,data=final_data)
+cv.error=cv.glm(final_data,glm.fit,K=10)$delta
+cv.error
+summary(glm.fit)
+```
+```{r}
+library(tree)
+set.seed(1)
+tree.brooklyn=tree(sale_price~.-building_class, data=final_data)
+summary(tree.brooklyn)
+plot(tree.brooklyn)
+text(tree.brooklyn, pretty=0)
+```
+```{r}
+final_data$category=as.factor(final_data$category)
+final_data$type_of_lot=as.factor(final_data$type_of_lot)
+
+```
+
+Lasso and ridge regression
+
+```{r}
+final_data2 = subset(final_data, select = c(sale_price, building_class, category, zip_code, gross_sqft, year_of_sale, year_built, CD, Council, ResArea, BldgFront, BldgDepth, AssessTot, ExemptTot, BuiltFAR, XCoord, YCoord ))
+```
+
+```{r}
+#splitting data
+set.seed(100)
+train = sample (1:nrow(final_data2), 0.7*(nrow(final_data2)))
+
+
+```
+
+
+```{r}
+library(glmnet)
+
+x = model.matrix(sale_price~., final_data2)[,-1]
+y= final_data2$sale_price
+
+grid = 10^seq(10,-2, length = 100)
+
+#fitting ridge model
+ridge.sale_price = glmnet (x[train,],y[train],alpha= 0 , lambda = grid)
+
+```
+
+```{r}
+#selecting best value of lambda for ridge
+set.seed(1)
+cv.out = cv.glmnet(x[train,],y[train], alpha = 0)
+plot(cv.out)
+bestlam.ridge = cv.out$lambda.min
+bestlam.ridge
+
+
+```
+```{r}
+#test MSE associated with best value of lambda
+
+ridge.pred = predict (ridge.sale_price,s = bestlam, newx = x[-train,])
+mean((ridge.pred - y[-train])^2)
+
+R2.ridge = 1-(sum((y[-train]- ridge.pred)^2)/sum((y[-train]-mean(y[-train]))^2))
+
+R2.ridge
+
+```
+
+```{r}
+#fitting the lasso
+
+lasso.sale_price = glmnet(x[train,], y[train], alpha = 1, lambda = grid)
+```
+
+
+```{r}
+#selecting best value of lambda for lasso
+set.seed(1)
+cv.out = cv.glmnet(x[train,],y[train], alpha = 1)
+plot(cv.out)
+bestlam.lasso = cv.out$lambda.min
+bestlam.lasso
+```
+
+```{r}
+#test MSE associated with the best value of lambda for the lasso
+lasso.pred = predict (lasso.sale_price, s = bestlam.lasso, newx = x[-train,])
+mean((lasso.pred - y[-train])^2)
+
+R2.lasso = 1-(sum((y[-train]- lasso.pred)^2)/sum((y[-train]-mean(y[-train]))^2))
+
+R2.lasso
+
+```
+
+```{r}
+#KNN regression
+
+R2.knn = numeric()
+
+knn001= FNN::knn.reg(train = x[train,], test = x[-train,], y = y[train], k = 1)
+
+knn005= FNN::knn.reg(train = x[train,], test = x[-train,], y = y[train], k = 5)
+
+knn010= FNN::knn.reg(train = x[train,], test = x[-train,], y = y[train], k = 10)
+
+knn050= FNN::knn.reg(train = x[train,], test = x[-train,], y = y[train], k = 50)
+
+knn060= FNN::knn.reg(train = x[train,], test = x[-train,], y = y[train], k = 60)
+
+knn100= FNN::knn.reg(train = x[train,], test = x[-train,], y = y[train], k = 100)
+
+knn1000= FNN::knn.reg(train = x[train,], test = x[-train,], y = y[train], k = 1000)
+
+
+R2.knn[1] =1 - (sum((y[-train]-knn001$pred)^2)/sum((y[-train]- mean(y[-train]))^2))
+R2.knn[2] =1 - (sum((y[-train]-knn005$pred)^2)/sum((y[-train]- mean(y[-train]))^2))
+R2.knn[3] =1 - (sum((y[-train]-knn010$pred)^2)/sum((y[-train]- mean(y[-train]))^2))
+R2.knn[4] =1 - (sum((y[-train]-knn050$pred)^2)/sum((y[-train]- mean(y[-train]))^2))
+R2.knn[5] =1 - (sum((y[-train]-knn100$pred)^2)/sum((y[-train]- mean(y[-train]))^2))
+R2.knn[6] =1 - (sum((y[-train]-knn060$pred)^2)/sum((y[-train]- mean(y[-train]))^2))
+R2.knn[7] =1 - (sum((y[-train]-knn1000$pred)^2)/sum((y[-train]- mean(y[-train]))^2))
+
+
+R2.knn
+
+```
+
+```{r}
+
+plot(sale_price ~ ., data =final_data2[train,], cex = .8, col = "dodgerblue", main = "k = 1")
+
+```
+
+
+```{r}
+bestlam.lasso
+```
+ 
+ 
+```{r}
+
+lasso.sale_price$lambda[67]
+
+
+```
+ 
