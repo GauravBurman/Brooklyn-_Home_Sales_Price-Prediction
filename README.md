@@ -3,11 +3,15 @@ Academic Project for ISEN Engineering Data Analysis
 
 ## INTRODUCTION
 
-Today we live in the era of information, a fast-paced and completely dynamic environment, where every choice plan or strategy, either in industry or by individuals, are based on informed decisions. Part of this informed decisions have to do with the ability to identify and predict future behavior of different items and issues.
+For this project, we analyzed a data set corresponding obtained from NYC Department of Finance website to develop important insights between different features and to write a predictive model to estimate the value of a property for Brooklyn City for given values of these parameters. 
 
-Brooklyn is the neighborhood of New York City that has developed de most in the last ten years. Since 2006 real estate prices have increased significantly. In 2006 the average price per square foot for condos and townhouses were approximately $330. In 2017 average price per square foot for properties of the same time was approximately $950.  The low availability and the increasing demand has made Brooklyn properties to hit record numbers. In the first quarter of 2018, median selling price rose to $800,000, a 3.5% increase from previous prices.
+Planning has become a basic need of this decade. Planning allow both individuals and organizations to avoid undesired situations, gain better economic stability and thus, obtain a better quality in operations and living. 
 
-If in need to purchase a property in the area, it is extremely important to be able to predict what the actual price for a home is, so that one can find better opportunities, and also no overpay for properties with inflated prices.
-For this project we analyzed a data set corresponding to Brooklyn, NY housing market. Planning has become a basic need of this decade. Planning allow both individuals and organizations to avoid undesired situations, gain better economic stability and thus, obtain a better quality in operations and living. 
+We did feature engineering, to create new attributes which categorized variables in a new way, and thus, makes it easier to understand and straight forward to model. The original data set was cleaned, and variables that not generated added value were removed. After obtaining a new data set, both univariate and bivariate analysis was performed.
 
-The goal of our study is to be able to predict future home prices, and later understand how different attributes positively or negatively affect house prices in the neighborhood of Brooklyn.
+In the Univariate Analysis each attribute was, removing outliers and ambiguous values. For example, Sale price values of $1, zip codes with null values and empty cells for any given attribute. Moreover, the Bivariate Analysis consisted in checking for correlation between attributes and dropping a few more predictors which we found to be highly correlated. After the dataset was cleaned, and both Univariate and Bivariate analysis were completed, we continued with the model fitting stage. 
+
+For model fitting, we tried different methods. Among those were Tree Regression (Boosting & Random Forest), K Nearest Neighbor, Multiple Linear Regression, Ridge Regression and Lasso Regression. 
+
+After fitting and analyzing each model, we found that Boosting and Random forest produce good accuracy, but yield poor interpretability. Whereas, Multiple Linear Regression, Lasso Regression, Ridge Regression produce less accurate result, but more interpretable models.
+
