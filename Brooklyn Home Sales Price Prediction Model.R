@@ -125,7 +125,7 @@ summary(tree.brooklyn)
 plot(tree.brooklyn)
 text(tree.brooklyn, pretty=0)
 
-#Boosting to check variable importance
+#Gradient Boosting to check variable importance
 install.packages("gbm")
 final_data$category=as.factor(final_data$category)
 final_data$type_of_lot=as.factor(final_data$type_of_lot)
